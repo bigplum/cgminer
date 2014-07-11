@@ -80,6 +80,9 @@ char *curly = ":D";
 #include "driver-spondoolies.h"
 #endif
 
+#ifdef USE_BE200
+#include "driver-be200.h"
+#endif
 
 #ifdef USE_BITFURY
 #include "driver-bitfury.h"
@@ -209,6 +212,9 @@ char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 float opt_anu_freq = 200;
 float opt_rock_freq = 270;
+#endif
+#ifdef USE_BE200
+float opt_set_be200_freq = 270;
 #endif
 bool opt_worktime;
 #ifdef USE_AVALON
@@ -1134,6 +1140,11 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_100, opt_show_intval, &opt_avalon2_overheat,
 		     "Set Avalon2 overheat cut off temperature"),
 #endif
+#ifdef USE_BE200
+	OPT_WITH_ARG("--be200-freq",
+		     set_float_125_to_500, &opt_show_floatval, &opt_set_be200_freq,
+		     "Set be200 frequency in MHz, range 125-500"),
+#endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
 		     opt_set_charp, NULL, &opt_bab_options,
@@ -1725,6 +1736,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_SPONDOOLIES
 		"spondoolies "
+#endif
+#ifdef USE_BE200
+		"be200 "
 #endif
 		"mining support.\n"
 		, packagename);

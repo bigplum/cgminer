@@ -102,6 +102,10 @@ if HAS_ICARUS
 cgminer_SOURCES += driver-icarus.c
 endif
 
+if HAS_BE200
+cgminer_SOURCES += driver-be200.c
+endif
+
 if HAS_KLONDIKE
 cgminer_SOURCES += driver-klondike.c
 endif

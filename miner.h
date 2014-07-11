@@ -238,6 +238,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(cointerra) \
 	DRIVER_ADD_COMMAND(hashfast) \
 	DRIVER_ADD_COMMAND(icarus) \
+	DRIVER_ADD_COMMAND(be200) \
 	DRIVER_ADD_COMMAND(klondike) \
 	DRIVER_ADD_COMMAND(knc) \
 	DRIVER_ADD_COMMAND(bitmineA1) \
@@ -435,6 +436,12 @@ struct cgpu_info {
 	int work_array;
 	int queued;
 	int results;
+#endif
+#if defined(USE_BE200)
+struct work **works;
+int work_array;
+int queued;
+int results;
 #endif
 #ifdef USE_MODMINER
 	char fpgaid;

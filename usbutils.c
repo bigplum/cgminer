@@ -60,6 +60,8 @@ static cgtimer_t usb11_cgt;
 #define DRILLBIT_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
 
+#define BE200_TIMEOUT_MS 999
+
 // There is no windows version
 #define ANT_S1_TIMEOUT_MS 200
 #define ANT_S2_TIMEOUT_MS 200
@@ -355,6 +357,16 @@ static struct usb_epinfo ants2_epinfos[] = {
 
 static struct usb_intinfo ants2_ints[] = {
 	USB_EPS(0, ants2_epinfos)
+};
+#endif
+
+#ifdef USE_BE200
+static struct usb_epinfo be200_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
+};
+static struct usb_intinfo be200_ints[] = {
+	USB_EPS(0, be200_epinfos)
 };
 #endif
 
@@ -681,6 +693,18 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = ANT_S2_TIMEOUT_MS,
 		.latency = LATENCY_ANTS2,
 		INTINFO(ants2_ints) },
+#endif
+#ifdef USE_BE200
+        {
+            .drv = DRIVER_be200,
+            .name = "BE200",
+            .ident = IDENT_BE200,
+            .idVendor = 0x10c4,
+            .idProduct = 0xea60,
+            .config = 1,
+            .timeout = BE200_TIMEOUT_MS,
+            .latency = LATENCY_STD,
+            INTINFO(be200_ints) },
 #endif
 	{ DRIVER_MAX, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };
