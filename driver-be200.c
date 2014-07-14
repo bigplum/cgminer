@@ -53,7 +53,6 @@ int opt_bitburner_fury_core_voltage = BITBURNER_FURY_DEFAULT_CORE_VOLTAGE;
 bool opt_be200_auto;
 
 static int option_offset = -1;
-static int bbf_option_offset = -1;
 
 void be200_create_task(struct be200_task *at,
 				      struct work *work)
@@ -84,35 +83,6 @@ static int be200_write(struct cgpu_info *be200, char *buf, ssize_t len, int ep)
 	return BE200_SEND_OK;
 }
 
-
-static bool be200_decode_nonce(struct thr_info *thr, struct cgpu_info *be200,
-				struct be200_info *info, struct be200_result *ar,
-				struct work *work)
-{
-	uint32_t nonce;
-
-	info = be200->device_data;
-	//info->matching_work[work->subid]++;
-	nonce = htole32(ar->nonce);
-
-	applog(LOG_DEBUG, "Avalon: nonce = %0x08x", nonce);
-	return submit_nonce(thr, work, nonce);
-}
-
-/* Wait until the ftdi chip returns a CTS saying we can send more data. */
-static void wait_be200_ready(struct cgpu_info *be200)
-{
-	while (be200_buffer_full(be200)) {
-		cgsleep_ms(40);
-	}
-}
-
-#define BE200_CTS    (1 << 4)
-
-static inline bool be200_cts(char c)
-{
-	return (c & BE200_CTS);
-}
 
 static int be200_read_one(struct cgpu_info *be200, char *buf, size_t bufsize, int ep)
 {
@@ -148,157 +118,20 @@ static int be200_read(struct cgpu_info *be200, char *buf, size_t bufsize, int ep
 	return amount;
 }
 
-static int be200_calc_timeout(int frequency)
-{
-	return BE200_TIMEOUT_FACTOR / frequency;
-}
 
-static bool get_options(int this_option_offset, int *baud, int *miner_count,
-			int *asic_count, int *timeout, int *frequency, int *asic,
-			char *options)
-{
-	char buf[BUFSIZ+1];
-	char *ptr, *comma, *colon, *colon2, *colon3, *colon4, *colon5;
-	bool timeout_default;
-	size_t max;
-	int i, tmp;
-
-	if (options == NULL)
-		buf[0] = '\0';
-	else {
-		ptr = options;
-		for (i = 0; i < this_option_offset; i++) {
-			comma = strchr(ptr, ',');
-			if (comma == NULL)
-				break;
-			ptr = comma + 1;
-		}
-
-		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
-		if (max > BUFSIZ)
-			max = BUFSIZ;
-		strncpy(buf, ptr, max);
-		buf[max] = '\0';
-	}
-
-	if (!(*buf))
-		return false;
-
-	colon = strchr(buf, ':');
-	if (colon)
-		*(colon++) = '\0';
-
-	tmp = atoi(buf);
-	switch (tmp) {
-	case 115200:
-		*baud = 115200;
-		break;
-	case 57600:
-		*baud = 57600;
-		break;
-	case 38400:
-		*baud = 38400;
-		break;
-	case 19200:
-		*baud = 19200;
-		break;
-	default:
-		quit(1, "Invalid be200-options for baud (%s) "
-			"must be 115200, 57600, 38400 or 19200", buf);
-	}
-
-	if (colon && *colon) {
-		colon2 = strchr(colon, ':');
-		if (colon2)
-			*(colon2++) = '\0';
-
-		if (*colon) {
-			tmp = atoi(colon);
-			if (tmp > 0 && tmp <= BE200_MAX_MINER_NUM) {
-				*miner_count = tmp;
-			} else {
-				quit(1, "Invalid be200-options for "
-					"miner_count (%s) must be 1 ~ %d",
-					colon, BE200_MAX_MINER_NUM);
-			}
-		}
-
-		if (colon2 && *colon2) {
-			colon3 = strchr(colon2, ':');
-			if (colon3)
-				*(colon3++) = '\0';
-
-			tmp = atoi(colon2);
-			if (tmp > 0 && tmp <= BE200_DEFAULT_ASIC_NUM)
-				*asic_count = tmp;
-			else {
-				quit(1, "Invalid be200-options for "
-					"asic_count (%s) must be 1 ~ %d",
-					colon2, BE200_DEFAULT_ASIC_NUM);
-			}
-
-			timeout_default = false;
-			if (colon3 && *colon3) {
-				colon4 = strchr(colon3, ':');
-				if (colon4)
-					*(colon4++) = '\0';
-
-				if (tolower(*colon3) == 'd')
-					timeout_default = true;
-				else {
-					tmp = atoi(colon3);
-					if (tmp > 0 && tmp <= 0xff)
-						*timeout = tmp;
-					else {
-						quit(1, "Invalid be200-options for "
-							"timeout (%s) must be 1 ~ %d",
-							colon3, 0xff);
-					}
-				}
-				if (colon4 && *colon4) {
-					colon5 = strchr(colon4, ':');
-					if (colon5)
-						*(colon5++) = '\0';
-
-					tmp = atoi(colon4);
-					if (tmp < BE200_MIN_FREQUENCY || tmp > BE200_MAX_FREQUENCY) {
-						quit(1, "Invalid be200-options for frequency, must be %d <= frequency <= %d",
-						     BE200_MIN_FREQUENCY, BE200_MAX_FREQUENCY);
-					}
-					*frequency = tmp;
-					if (timeout_default)
-						*timeout = be200_calc_timeout(*frequency);
-					if (colon5 && *colon5) {
-						tmp = atoi(colon5);
-						if (tmp != BE200_A3256 && tmp != BE200_A3255)
-							quit(1, "Invalid be200-options for asic, must be 110 or 55");
-						*asic = tmp;
-					}
-				}
-			}
-		}
-	}
-	return true;
-}
+#define transfer(be200, request_type, bRequest, wValue, wIndex, cmd) \
+		_transfer(be200, request_type, bRequest, wValue, wIndex, NULL, 0, cmd)
 
 
-#define transfer(icarus, request_type, bRequest, wValue, wIndex, cmd) \
-		_transfer(icarus, request_type, bRequest, wValue, wIndex, NULL, 0, cmd)
-
-
-static void _transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, enum usb_cmds cmd)
+static void _transfer(struct cgpu_info *be200, uint8_t request_type, uint8_t bRequest, 
+                    uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, enum usb_cmds cmd)
 {
 	int err;
 
-	err = usb_transfer_data(icarus, request_type, bRequest, wValue, wIndex, data, siz, cmd);
+	err = usb_transfer_data(be200, request_type, bRequest, wValue, wIndex, data, siz, cmd);
 
 	applog(LOG_DEBUG, "%s: cgid %d %s got err %d",
-			icarus->drv->name, icarus->cgminer_id,
+			be200->drv->name, be200->cgminer_id,
 			usb_cmdname(cmd), err);
 }
 
@@ -505,73 +338,6 @@ static void be200_init(struct cgpu_info *be200)
 	applog(LOG_INFO, "BE200: Opened on %s", be200->device_path);
 }
 
-static void be200_update_temps(struct cgpu_info *be200, struct be200_info *info,
-				struct be200_result *ar);
-
-
-static void be200_parse_results(struct cgpu_info *be200, struct be200_info *info,
-				 struct thr_info *thr, char *buf, int *offset)
-{
-
-}
-
-static void *be200_get_results(void *userdata)
-{
-	struct cgpu_info *be200 = (struct cgpu_info *)userdata;
-	struct be200_info *info = be200->device_data;
-	const int rsize = BE200_FTDI_READSIZE;
-	char readbuf[BE200_READBUF_SIZE];
-	struct thr_info *thr = info->thr;
-	int offset = 0, ret = 0;
-	char threadname[16];
-       uint8_t cmd_char, out_char;
-
-	snprintf(threadname, sizeof(threadname), "%d/AvaRecv", be200->device_id);
-	RenameThread(threadname);
-
-	while (likely(!be200->shutdown)) {
-		char buf[rsize];
-
-                //todo: send a7 to query the status
-                cmd_char = C_ASK + info->board_id;
-                ret = be200_write(be200, (char *)&cmd_char, 1, C_BE200_INIT);
-                
-                applog(LOG_DEBUG, "BE200 getresult cmd: %x", cmd_char);
-                
-                cgsleep_ms(500);
-                ret = be200_read(be200, (char *)&out_char, 1, C_BE200_READ);
-                
-                applog(LOG_DEBUG, "BE200 getresult return: %x", out_char);
-
-
-		if (ret < 1)
-			continue;
-
-		if (opt_debug) {
-			applog(LOG_DEBUG, "BE200: get:");
-			hexdump((uint8_t *)buf, ret);
-		}
-
-		memcpy(&readbuf[offset], &buf, ret);
-		offset += ret;
-	}
-	return NULL;
-}
-
-static void be200_rotate_array(struct cgpu_info *be200, struct be200_info *info)
-{
-	mutex_lock(&info->qlock);
-	be200->queued = 0;
-	if (++be200->work_array >= BE200_ARRAY_SIZE)
-		be200->work_array = 0;
-	mutex_unlock(&info->qlock);
-}
-
-static void be200_set_timeout(struct be200_info *info)
-{
-	info->timeout = be200_calc_timeout(info->frequency);
-}
-
 static bool be200_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *be200 = thr->cgpu;
@@ -602,40 +368,6 @@ static bool be200_prepare(struct thr_info *thr)
 
 	return true;
 }
-
-
-/* We use a replacement algorithm to only remove references to work done from
- * the buffer when we need the extra space for new work. */
-static bool be200_fill(struct cgpu_info *be200)
-{
-	struct be200_info *info = be200->device_data;
-	int subid, slot, mc;
-	struct work *work;
-	bool ret = true;
-
-	mc = info->miner_count;
-	mutex_lock(&info->qlock);
-	if (be200->queued >= mc)
-		goto out_unlock;
-	work = get_queued(be200);
-	if (unlikely(!work)) {
-		ret = false;
-		goto out_unlock;
-	}
-	subid = be200->queued++;
-	work->subid = subid;
-	slot = be200->work_array * mc + subid;
-	if (likely(be200->works[slot]))
-		work_completed(be200, be200->works[slot]);
-	be200->works[slot] = work;
-	if (be200->queued < mc)
-		ret = false;
-out_unlock:
-	mutex_unlock(&info->qlock);
-
-	return ret;
-}
-
 
 
 static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
@@ -705,6 +437,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
         int ret;
         uint8_t cmd_char, out_char;
         uint8_t buf[128];
+        bool bret;
 
 	if (thr->work_restart || thr->work_update ||
 	    info->first) {
@@ -739,67 +472,41 @@ static int64_t be200_scanhash(struct thr_info *thr)
     
     applog(LOG_DEBUG, "BE200 getresult return: %x", out_char);
 
+    int nonce_test_array[8] = {-3, -2, -1, 0, 2, 3, 4, 5};
+    int i = 0;
+
     if (out_char == A_YES) {
 
-        uint32_t nonce, nonce2, ntime;
-        
+        uint32_t nonce, ntime;
+
         // returns midstate[32+4], ntime[4], ndiff[4], exnonc2[4], nonce[4], mj_ID[1], chipID[1] 
         ret = be200_read(be200, (char *)buf, 54, C_BE200_READ);
-	applog(LOG_DEBUG, "BE200: Get Result data(%u):", (unsigned int)54);
+        applog(LOG_DEBUG, "BE200: Get Result data(%u):", (unsigned int)54);
         hexdump(buf, 54);
 
-        memcpy(&nonce2, buf + 44, 4);
         memcpy(&nonce, buf + 48, 4);
         memcpy(&ntime, buf + 36, 4);
-        nonce2 = htole32(nonce2);
         nonce = htole32(nonce);
         ntime = htobe32(ntime);
 
-	applog(LOG_DEBUG, "==== Found! (%08x) (%08x) %08x",
-			        nonce2, nonce, ntime);
-    hexdump((uint8_t *)be200->works[0] + 128, 96);
+        applog(LOG_DEBUG, "==== Found! (%08x) (%08x)",
+        	        nonce, ntime);
+        hexdump((uint8_t *)be200->works[0] + 128, 96);
 
         set_work_ntime(be200->works[0], ntime);
-        submit_nonce(thr, be200->works[0], nonce);
+        bret = submit_nonce(thr, be200->works[0], nonce + 1);
 
-        nonce = htobe32(nonce);
-        ntime = htobe32(ntime);
-        applog(LOG_DEBUG, "==== Found! (%08x) (%08x) %08x",
-                        nonce2, nonce, ntime);
-        set_work_ntime(be200->works[0], ntime);
-        submit_nonce(thr, be200->works[0], nonce);
+        while (!bret) {
+            nonce += nonce_test_array[i];
+            i++;
+            applog(LOG_DEBUG, "BE200 test nonce (%08x) (%08x)",
+                            nonce, ntime);
+            bret = submit_nonce(thr, be200->works[0], nonce);
         }
+    }
 
-	/* This hashmeter is just a utility counter based on returned shares */
-	return hash_count;
-}
-
-static void be200_flush_work(struct cgpu_info *be200)
-{
-	struct be200_info *info = be200->device_data;
-
-	/* Will overwrite any work queued. Do this unlocked since it's just
-	 * changing a single non-critical value and prevents deadlocks */
-	be200->queued = 0;
-
-	/* Signal main loop we need more work */
-	cgsem_post(&info->qsem);
-}
-
-static struct api_data *be200_api_stats(struct cgpu_info *cgpu)
-{
-	struct api_data *root = NULL;
-	struct be200_info *info = cgpu->device_data;
-	char buf[64];
-	int i;
-	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
-		     (double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
-
-	root = api_add_int(root, "baud", &(info->baud), false);
-	root = api_add_int(root, "miner_count", &(info->miner_count),false);
-	root = api_add_int(root, "asic_count", &(info->asic_count), false);
-
-	return root;
+    /* This hashmeter is just a utility counter based on returned shares */
+    return hash_count;
 }
 
 struct device_drv be200_drv = {
@@ -808,13 +515,9 @@ struct device_drv be200_drv = {
 	.name = "BE200",
 	.drv_detect = be200_detect,
 	.thread_prepare = be200_prepare,
-	.hash_work = hash_queued_work,
-	.queue_full = be200_fill,
+	.hash_work = hash_driver_work,
+	//.queue_full = be200_fill,
 	.scanwork = be200_scanhash,
-	.flush_work = be200_flush_work,
-	//.get_api_stats = be200_api_stats,
-	//.get_statline_before = get_be200_statline_before,
-	//.set_device = be200_set_device,
 	.reinit_device = be200_init,
 //	.thread_shutdown = be200_shutdown,
 };
