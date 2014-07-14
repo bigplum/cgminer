@@ -87,7 +87,7 @@
 
 // commands board specified ones
 
-#define C_JOB	(4 << 5)	//20 followed by WL[44] + exnc2[4] + MJOB_IDx[1] in 8N1, returns 0x58= confirmation that the Job has been gotten, good for sync also
+#define C_JOB	(4 << 5)	//80 followed by WL[44] + exnc2[4] + MJOB_IDx[1] in 8N1, returns 0x58= confirmation that the Job has been gotten, good for sync also
 #define C_ASK	(5 << 5)	//A0 see below
 #define C_TRS	(6 << 5)	//C0 returns 32 bytes status of the core test + 32 bytes clocks + 1 byte = g_dif + (InFuture/10)-1)[1]  ... total 66 bytes
 #define C_CLK	(7 << 5)	//E0 resets mega88 on the selected board, returns silence
@@ -122,6 +122,10 @@ struct be200_result {
 }; //__attribute__((packed, aligned(4)));
 
 struct be200_info {
+    
+	bool first;
+
+
         int baud;
 	int miner_count;
 	int asic_count;
