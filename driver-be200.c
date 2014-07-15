@@ -478,7 +478,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
     //cgsleep_ms(500);
     ret = be200_read_one(be200, (char *)&out_char, 1, C_BE200_READ);
     
-    applog(LOG_DEBUG, "BE200 getresult return: %x", out_char);
+    applog(LOG_DEBUG, "BE200 getresult %x, return %d, rest %d", out_char, ret, be200->usbdev->bufamt);
 
     int nonce_test_array[8] = {-3, -2, -1, 0, 2, 3, 4, 5};
     int i = 0;
@@ -487,7 +487,12 @@ static int64_t be200_scanhash(struct thr_info *thr)
 
 
         // returns midstate[32+4], ntime[4], ndiff[4], exnonc2[4], nonce[4], mj_ID[1], chipID[1] 
+	if (be200->usbdev->bufamt == 54) {
+		memcpy(buf, be200->usbdev->buffer, 54);
+		be200->usbdev->bufamt = 0;
+} else {
         ret = be200_read(be200, (char *)buf, 54, C_BE200_READ);
+}
         applog(LOG_DEBUG, "BE200: Get Result data(%u):", (unsigned int)54);
         hexdump(buf, 54);
 
