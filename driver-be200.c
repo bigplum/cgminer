@@ -68,8 +68,8 @@ static int be200_write(struct cgpu_info *be200, char *buf, ssize_t len, int ep)
 	int err, amount;
 
 	err = usb_write(be200, buf, len, &amount, ep);
-	applog(LOG_DEBUG, "%s%i: usb_write got err %d", be200->drv->name,
-	       be200->device_id, err);
+	//applog(LOG_DEBUG, "%s%i: usb_write got err %d", be200->drv->name,
+	//       be200->device_id, err);
 
 	if (unlikely(err != 0)) {
 		applog(LOG_WARNING, "usb_write error on be200_write");
@@ -91,8 +91,8 @@ static int be200_read_one(struct cgpu_info *be200, char *buf, size_t bufsize, in
 	int err, amount, ofs = 2, cp;
 
 	err = usb_read_once(be200, readbuf, readsize, &amount, ep);
-	applog(LOG_DEBUG, "%s%i: Get be200 read got err %d",
-	       be200->drv->name, be200->device_id, err);
+	//applog(LOG_DEBUG, "%s%i: Get be200 read got err %d",
+	//       be200->drv->name, be200->device_id, err);
 	if (err && err != LIBUSB_ERROR_TIMEOUT)
 		return err;
 
@@ -108,8 +108,8 @@ static int be200_read(struct cgpu_info *be200, char *buf, size_t bufsize, int ep
 	int err, amount, ofs = 2, cp;
 
 	err = usb_read_once(be200, readbuf, readsize, &amount, ep);
-	applog(LOG_DEBUG, "%s%i: Get be200 read got err %d",
-	       be200->drv->name, be200->device_id, err);
+	//applog(LOG_DEBUG, "%s%i: Get be200 read got err %d",
+	//       be200->drv->name, be200->device_id, err);
 	if (err && err != LIBUSB_ERROR_TIMEOUT)
 		return err;
 
@@ -476,12 +476,12 @@ static int64_t be200_scanhash(struct thr_info *thr)
     cmd_char = C_ASK + info->board_id;
     ret = be200_write(be200, (char *)&cmd_char, 1, C_BE200_INIT);
     
-    applog(LOG_DEBUG, "BE200 getresult cmd: %x", cmd_char);
+    //applog(LOG_DEBUG, "BE200 getresult cmd: %x", cmd_char);
     
     //cgsleep_ms(500);
     ret = be200_read_one(be200, (char *)&out_char, 1, C_BE200_READ);
     
-    applog(LOG_DEBUG, "BE200 getresult %x, return %d, rest %d", out_char, ret, be200->usbdev->bufamt);
+    //applog(LOG_DEBUG, "BE200 getresult %x, return %d, rest %d", out_char, ret, be200->usbdev->bufamt);
 
     int nonce_test_array[8] = {-3, -2, -1, 0, 2, 3, 4, 5};
     int i = 0;
