@@ -995,6 +995,9 @@ extern char *opt_icarus_timing;
 extern float opt_anu_freq;
 extern float opt_rock_freq;
 #endif
+#ifdef USE_BE200
+extern float opt_set_be200_freq;
+#endif
 extern bool opt_worktime;
 #ifdef USE_AVALON
 extern char *opt_avalon_options;

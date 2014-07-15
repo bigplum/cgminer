@@ -383,12 +383,15 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
 	unsigned char target[32];
         struct pool *pool;
 
+        
+
         buf[0] = 0x61;
         buf[1] = 0x2b;
-        buf[2] = 0x5f;    //320m
-        //applog(LOG_DEBUG, "BE200: set diff to: %d", target);
+        buf[2] = 0x40 + opt_set_be200_freq/10 -1;    //320m
         ret = be200_write(be200, (char *)buf, 3, ep);
-
+        applog(LOG_DEBUG, "BE200: set diff and freq:");
+        hexdump(buf, 3);
+        
         cmd_char = C_JOB + info->board_id;
         
         ret = be200_write(be200, (char *)&cmd_char, 1, ep);
@@ -490,9 +493,9 @@ static int64_t be200_scanhash(struct thr_info *thr)
 	if (be200->usbdev->bufamt == 54) {
 		memcpy(buf, be200->usbdev->buffer, 54);
 		be200->usbdev->bufamt = 0;
-} else {
-        ret = be200_read(be200, (char *)buf, 54, C_BE200_READ);
-}
+        } else {
+                ret = be200_read(be200, (char *)buf, 54, C_BE200_READ);
+        }
         applog(LOG_DEBUG, "BE200: Get Result data(%u):", (unsigned int)54);
         hexdump(buf, 54);
 
