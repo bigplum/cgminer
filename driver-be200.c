@@ -382,12 +382,15 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
 
 	unsigned char target[32];
         struct pool *pool;
+        int idiff = pool->sdiff;
+        if (idiff > 256*1024)   idiff = 3;
+        else if (idiff > 4096) idiff = 2;
+        else if (idiff > 64) idiff = 1;
+        else idiff = 0;
 
-        
-
-        buf[0] = 0x61;
-        buf[1] = 0x2b;
-        buf[2] = 0x40 + opt_set_be200_freq/10 -1;    //320m
+        buf[0] = 0x60 + idiff;   //diff
+        buf[1] = 0x2b;   //time rolling
+        buf[2] = 0x40 + opt_set_be200_freq/10 -1;    //freq
         ret = be200_write(be200, (char *)buf, 3, ep);
         applog(LOG_DEBUG, "BE200: set diff and freq:");
         hexdump(buf, 3);
