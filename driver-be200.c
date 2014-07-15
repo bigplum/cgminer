@@ -276,7 +276,7 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
             
             applog(LOG_DEBUG, "BE200 init board: %x", cmd_char);
 
-            cgsleep_ms(500);
+            cgsleep_ms(3000);
             ret = be200_read(be200, (char *)&out_char, 1, C_BE200_READ);
             
             applog(LOG_DEBUG, "BE200 init board return: %x", out_char);
@@ -290,7 +290,7 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
         
         cmd_char = C_TRS + info->board_id;
         ret = be200_write(be200, (char *)&cmd_char, 1, C_BE200_INIT);
-        cgsleep_ms(500);
+        cgsleep_ms(1000);
         ret = be200_read(be200, buf, 67, C_BE200_READ);
         applog(LOG_DEBUG, "BE200 send: %x, get %d", cmd_char, ret);
         hexdump((uint8_t *)buf, ret);
@@ -378,11 +378,18 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
 	int delay, ret, i, ep = C_BE200_TASK;
 	uint32_t nonce_range;
 	size_t nr_len;
-    
 
+
+	unsigned char target[32];
+        struct pool *pool;
+
+        buf[0] = 0x61;
+        buf[1] = 0x2b;
+        buf[2] = 0x5f;    //320m
+        //applog(LOG_DEBUG, "BE200: set diff to: %d", target);
+        ret = be200_write(be200, (char *)buf, 3, ep);
 
         cmd_char = C_JOB + info->board_id;
-
         
         ret = be200_write(be200, (char *)&cmd_char, 1, ep);
 
@@ -405,16 +412,16 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
     
 
 	/* Sleep from the last time we sent data */
-	cgsleep_us_r(&info->cgsent, info->send_delay);
+	//cgsleep_us_r(&info->cgsent, info->send_delay);
 
-	cgsleep_prepare_r(&info->cgsent);
+	//cgsleep_prepare_r(&info->cgsent);
 	ret = be200_write(be200, (char *)buf, nr_len, ep);
 
 	applog(LOG_DEBUG, "BE200: Sent task: Buffer delay: %dus", info->send_delay);
 	info->send_delay = delay;
 
 
-    cgsleep_ms(500);
+    //cgsleep_ms(500);
     ret = be200_read_one(be200, (char *)&out_char, 1, ep);
     
     applog(LOG_DEBUG, "====BE200 send task return: %x", out_char);
@@ -430,7 +437,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
 	struct cgpu_info *be200 = thr->cgpu;
 	struct be200_info *info = be200->device_data;
 	const int miner_count = info->miner_count;
-	int64_t hash_count, ms_timeout;
+	int64_t hash_count = 0, ms_timeout;
 
 	struct work *work;
         struct be200_task at;
@@ -438,6 +445,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
         uint8_t cmd_char, out_char;
         uint8_t buf[128];
         bool bret;
+        uint32_t nonce, ntime, test_nonce;
 
 	if (thr->work_restart || thr->work_update ||
 	    info->first) {
@@ -467,7 +475,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
     
     applog(LOG_DEBUG, "BE200 getresult cmd: %x", cmd_char);
     
-    cgsleep_ms(500);
+    //cgsleep_ms(500);
     ret = be200_read_one(be200, (char *)&out_char, 1, C_BE200_READ);
     
     applog(LOG_DEBUG, "BE200 getresult return: %x", out_char);
@@ -477,7 +485,6 @@ static int64_t be200_scanhash(struct thr_info *thr)
 
     if (out_char == A_YES) {
 
-        uint32_t nonce, ntime;
 
         // returns midstate[32+4], ntime[4], ndiff[4], exnonc2[4], nonce[4], mj_ID[1], chipID[1] 
         ret = be200_read(be200, (char *)buf, 54, C_BE200_READ);
@@ -494,20 +501,41 @@ static int64_t be200_scanhash(struct thr_info *thr)
         hexdump((uint8_t *)be200->works[0] + 128, 96);
 
         set_work_ntime(be200->works[0], ntime);
-        bret = submit_nonce(thr, be200->works[0], nonce + 1);
+        test_nonce = nonce + 1;
+        bret = submit_nonce(thr, be200->works[0], test_nonce);
 
-        while (!bret) {
-            nonce += nonce_test_array[i];
+        i = 0;
+        while (!bret && i < 8) {
+            test_nonce = nonce + nonce_test_array[i];
             i++;
             applog(LOG_DEBUG, "BE200 test nonce (%08x) (%08x)",
-                            nonce, ntime);
-            bret = submit_nonce(thr, be200->works[0], nonce);
+                            test_nonce, ntime);
+            bret = submit_nonce(thr, be200->works[0], test_nonce);
         }
+        if (!bret) {
+            hash_count = 0;
+        } else {
+            hash_count = 0xffffffff * test_nonce;
+        }
+    }else if (out_char == A_WAL) {
+        info->first = true;
     }
 
     /* This hashmeter is just a utility counter based on returned shares */
     return hash_count;
 }
+
+
+static void be200_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info *be200 = thr->cgpu;
+
+    applog(LOG_DEBUG, "BE200 shutdown ..............................");
+
+	free(be200->works);
+	be200->works = NULL;
+}
+
 
 struct device_drv be200_drv = {
 	.drv_id = DRIVER_be200,
@@ -519,5 +547,5 @@ struct device_drv be200_drv = {
 	//.queue_full = be200_fill,
 	.scanwork = be200_scanhash,
 	.reinit_device = be200_init,
-//	.thread_shutdown = be200_shutdown,
+	.thread_shutdown = be200_shutdown,
 };
