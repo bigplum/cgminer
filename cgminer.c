@@ -36,6 +36,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "miner.h"
+
 #ifndef WIN32
 #include <sys/resource.h>
 #else
@@ -52,7 +54,6 @@ char *curly = ":D";
 #include <sha2.h>
 
 #include "compat.h"
-#include "miner.h"
 #include "bench_block.h"
 #ifdef USE_USBUTILS
 #include "usbutils.h"
@@ -5878,7 +5879,7 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 	decay_time(&rolling1, hashes_done, tv_tdiff, 60.0);
 	decay_time(&rolling5, hashes_done, tv_tdiff, 300.0);
 	decay_time(&rolling15, hashes_done, tv_tdiff, 900.0);
-	global_hashrate = llround(total_rolling) * 1000000;
+	global_hashrate = (long long)round(total_rolling) * 1000000;
 	total_secs = tdiff(&total_tv_end, &total_tv_start);
 	if (showlog) {
 		char displayed_hashes[16], displayed_rolling[16];
