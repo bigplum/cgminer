@@ -60,13 +60,13 @@ static cgtimer_t usb11_cgt;
 #define DRILLBIT_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
 
-#define BE200_TIMEOUT_MS 999
 
 // There is no windows version
 #define ANT_S1_TIMEOUT_MS 200
 #define ANT_S2_TIMEOUT_MS 200
 
 #ifdef WIN32
+#define BE200_TIMEOUT_MS 0
 #define BFLSC_TIMEOUT_MS 999
 #define BITFORCE_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 999
@@ -80,6 +80,7 @@ static cgtimer_t usb11_cgt;
 #define WIN_CALLBACK_EXTRA 40
 #define WIN_WRITE_CBEXTRA 5000
 #else
+#define BE200_TIMEOUT_MS 999
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
