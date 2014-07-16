@@ -381,8 +381,10 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
 
 
 	unsigned char target[32];
-        struct pool *pool;
+        struct pool *pool = current_pool();
         int idiff = pool->sdiff;
+        applog(LOG_DEBUG, "BE200: pool diff: %d", idiff);
+        
         if (idiff > 256*1024)   idiff = 3;
         else if (idiff > 4096) idiff = 2;
         else if (idiff > 64) idiff = 1;
@@ -529,6 +531,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
             hash_count = 0xffffffff * test_nonce;
         }
     }else if (out_char == A_WAL) {
+        applog(LOG_DEBUG, "BE200: chip get ready");
         info->first = true;
     }
 
