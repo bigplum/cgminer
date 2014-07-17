@@ -124,7 +124,7 @@ struct be200_result {
 struct be200_info {
     
 	bool first;
-
+    int device_diff;
 
         int baud;
 	int miner_count;

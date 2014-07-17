@@ -385,10 +385,19 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
         int idiff = pool->sdiff;
         applog(LOG_DEBUG, "BE200: pool diff: %d", idiff);
         
-        if (idiff > 256*1024)   idiff = 3;
-        else if (idiff > 4096) idiff = 2;
-        else if (idiff > 64) idiff = 1;
-        else idiff = 0;
+        if (idiff >= 256*1024){
+            idiff = 3;
+            info->device_diff = 256*1024;
+        } else if (idiff >= 4096) {
+            idiff = 2;
+            info->device_diff = 4096;
+        } else if (idiff >= 64) {
+            idiff = 1;
+            info->device_diff = 64;
+        }else {
+            idiff = 0;
+            info->device_diff = 1;
+        }
 
         buf[0] = 0x60 + idiff;   //diff
         buf[1] = 0x2b;   //time rolling
@@ -528,15 +537,14 @@ static int64_t be200_scanhash(struct thr_info *thr)
         if (!bret) {
             hash_count = 0;
         } else {
-            hash_count = 0xffffffff * test_nonce;
+            hash_count = 0xFFFFFFFF;
         }
     }else if (out_char == A_WAL) {
         applog(LOG_DEBUG, "BE200: chip get ready");
         info->first = true;
     }
 
-    /* This hashmeter is just a utility counter based on returned shares */
-    return hash_count;
+    return hash_count * info->device_diff;
 }
 
 
