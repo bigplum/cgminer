@@ -14,17 +14,8 @@
 #ifdef USE_BE200
 
 #include "util.h"
-
-#define BE200_RESET_FAULT_DECISECONDS 1
 #define BE200_MINER_THREADS 1
-
-#define BE200_IO_SPEED		115200
-#define BE200_HASH_TIME_FACTOR	((float)1.67/0x32)
-#define BE200_RESET_PITCH	(300*1000*1000)
-
-
-#define BE200_A3256	110
-#define BE200_A3255	55
+#define BE200_READBUF_SIZE 1024
 
 #define BE200_FAN_FACTOR 120
 #define BE200_PWM_MAX 0xA0
@@ -37,41 +28,12 @@
 #define BE200_TEMP_HYSTERESIS 3
 #define BE200_TEMP_OVERHEAT 60
 
-/* Avalon-based BitBurner. */
-#define BITBURNER_DEFAULT_CORE_VOLTAGE 1200 /* in millivolts */
-#define BITBURNER_MIN_COREMV 1000
-/* change here if you want to risk killing it :)  */
-#define BITBURNER_MAX_COREMV 1400
-
-/* BitFury-based BitBurner. */
-#define BITBURNER_FURY_DEFAULT_CORE_VOLTAGE 900 /* in millivolts */
-#define BITBURNER_FURY_MIN_COREMV 700
-/* change here if you want to risk killing it :)  */
-#define BITBURNER_FURY_MAX_COREMV 1100
-
-
 #define BE200_DEFAULT_TIMEOUT 0x2D
-#define BE200_MIN_FREQUENCY 256
-#define BE200_MAX_FREQUENCY 2000
-#define BE200_TIMEOUT_FACTOR 12690
-#define BE200_DEFAULT_FREQUENCY 282
-#define BE200_DEFAULT_MINER_NUM 0x20
-#define BE200_MAX_MINER_NUM 0x100
-#define BE200_DEFAULT_ASIC_NUM 0xA
-
-/* Default number of miners for Bitburner Fury is for a stack of 8 boards,
-   but it will work acceptably for smaller stacks, too */
-#define BITBURNER_FURY_DEFAULT_MINER_NUM 128
-#define BITBURNER_FURY_DEFAULT_FREQUENCY 256
-#define BITBURNER_FURY_DEFAULT_TIMEOUT 50
-
-#define BE200_AUTO_CYCLE 1024
-
-#define BE200_FTDI_READSIZE 510
-#define BE200_READBUF_SIZE 8192
-/* Set latency to just less than full 64 byte packet size at 115200 baud */
-#define BE200_LATENCY 4
-
+#define BE200_MIN_FREQUENCY 160
+#define BE200_MAX_FREQUENCY 360
+#define BE200_DEFAULT_FREQUENCY 320
+#define BE200_MAX_MINER_NUM 32
+#define BE200_MAX_ASIC_NUM 24
 
 // modes of C_CLK
 #define M_OFF	0xff
@@ -100,49 +62,48 @@
 // A_YES is followed by ... see below in the function AnswerIT();
 // ------------------------
 
-#define BE200_MAX_BOARD_NUM  32
-
 
 struct be200_task {
-	uint8_t midstate[32];
-	uint8_t mshit[4];
-	uint8_t ntime[4];
-	uint8_t ndiff[4];
-	uint8_t exnc2[4];
-	uint8_t mj_ID;
+    uint8_t midstate[32];
+    uint8_t mshit[4];
+    uint8_t ntime[4];
+    uint8_t ndiff[4];
+    uint8_t exnc2[4];
+    uint8_t mj_ID;
 }; //__attribute__((packed, aligned(4)));
 
 struct be200_result {
-	uint8_t midstate[32];
-	uint32_t diff;
-	uint32_t nonce;
-	uint32_t job_id;
+    uint8_t midstate[32];
+    uint32_t diff;
+    uint32_t nonce;
+    uint32_t job_id;
 
-	uint8_t chip_num;
+    uint8_t chip_num;
 }; //__attribute__((packed, aligned(4)));
 
+struct miner_info {
+    int id;
+    int freq;
+    int asic_count;
+    uint64_t asic_hash_done[BE200_MAX_ASIC_NUM];
+};
+
 struct be200_info {
-    
-	bool first;
+
+    bool first;
     int device_diff;
 
-        int baud;
-	int miner_count;
-	int asic_count;
-	int timeout;
-        int board_id;
+    int miner_count;
+    struct miner_info miner[BE200_MAX_MINER_NUM];
 
-	int frequency;
-	uint32_t asic;
 
-	struct thr_info *thr;
-	pthread_t read_thr;
-	pthread_t write_thr;
-	pthread_mutex_t lock;
-	pthread_mutex_t qlock;
-	cgsem_t qsem;
-	cgtimer_t cgsent;
-	int send_delay;
+    struct thr_info *thr;
+    pthread_t read_thr;
+    pthread_t write_thr;
+    pthread_mutex_t lock;
+    pthread_mutex_t qlock;
+    cgsem_t qsem;
+    cgtimer_t cgsent;
 
 };
 
@@ -150,19 +111,12 @@ struct be200_info {
 #define BE200_WRITE_SIZE (sizeof(struct be200_task))
 #define BE200_READ_SIZE (sizeof(struct be200_result))
 #define BE200_ARRAY_SIZE 3
-#define BITBURNER_ARRAY_SIZE 4
 
 #define BE200_GETS_ERROR -1
 #define BE200_GETS_OK 0
 
 #define BE200_SEND_ERROR -1
 #define BE200_SEND_OK 0
-
-#define be200_buffer_full(be200) !usb_ftdi_cts(be200)
-
-#define BE200_READ_TIME(baud) ((double)BE200_READ_SIZE * (double)8.0 / (double)(baud))
-#define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
-ASSERT1(sizeof(uint32_t) == 4);
 
 extern struct be200_info **be200_info;
 extern int opt_be200_temp;
@@ -174,8 +128,6 @@ extern int opt_be200_freq_max;
 extern bool opt_be200_auto;
 extern int opt_bitburner_core_voltage;
 extern int opt_bitburner_fury_core_voltage;
-extern char *set_be200_fan(char *arg);
-extern char *set_be200_freq(char *arg);
 
 #endif /* USE_BE200 */
 #endif	/* BE200_H */
