@@ -293,6 +293,7 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
             }
         }
     }
+    info->miner_count = idx;
 
     if (!add_cgpu(be200))
         goto unshin;
@@ -403,7 +404,7 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
     applog(LOG_DEBUG, "BE200: set diff and freq:");
     hexdump(buf, 3);
 
-    cmd_char = C_JOB + info->miner[0].id;  //todo
+    cmd_char = C_JOB + info->miner[0].id;  //todo: send task to multi miner
 
     ret = be200_write(be200, (char *)&cmd_char, 1, ep);
 
@@ -447,15 +448,13 @@ static int64_t be200_scanhash(struct thr_info *thr)
 
     struct work *work;
     struct be200_task at;
-    int ret;
+    int ret, i;
     uint8_t cmd_char, out_char;
     uint8_t buf[128];
     bool bret;
     uint32_t nonce, ntime, test_nonce;
 
-    if (thr->work_restart || thr->work_update ||
-        info->first) {
-        //info->new_stratum = true;
+    if (thr->work_restart || thr->work_update || info->first) {
         applog(LOG_DEBUG, "BE200: New stratum: restart: %d, update: %d, first: %d",
                thr->work_restart, thr->work_update, info->first);
         thr->work_update = false;
@@ -463,76 +462,81 @@ static int64_t be200_scanhash(struct thr_info *thr)
         if (unlikely(info->first))
             info->first = false;
 
-        work = get_work(thr, thr->id);
-        be200->works[0] = work;
-        be200_create_task(&at, work);
-        ret = be200_send_task(&at, be200, info);
+        for (i = 0; i < info->miner_count; i++) {
+            work = get_work(thr, thr->id);
+            if (be200->works[i]) {
+                //free(be200->works[i]);
+            }
+            be200->works[i] = work;
+            be200_create_task(&at, work);
+            ret = be200_send_task(&at, be200, info);
+        }
 
         if (unlikely(be200->usbinfo.nodev)) {
             applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
                    be200->drv->name, be200->device_id);
             hash_count = -1;
+            return -1;
         }
     }
 
 
-    cmd_char = C_ASK + info->miner[0].id;  //todo
-    ret = be200_write(be200, (char *)&cmd_char, 1, C_BE200_INIT);
+    for (i = 0; i < info->miner_count; i++) {
+        cmd_char = C_ASK + info->miner[i].id;  //todo, need test
+        ret = be200_write(be200, (char *)&cmd_char, 1, C_BE200_INIT);
 
-    //applog(LOG_DEBUG, "BE200 getresult cmd: %x", cmd_char);
+        //applog(LOG_DEBUG, "BE200 getresult cmd: %x", cmd_char);
 
-    //cgsleep_ms(500);
-    ret = be200_read_one(be200, (char *)&out_char, 1, C_BE200_READ);
+        //cgsleep_ms(500);
+        ret = be200_read_one(be200, (char *)&out_char, 1, C_BE200_READ);
 
-    //applog(LOG_DEBUG, "BE200 getresult %x, return %d, rest %d", out_char, ret, be200->usbdev->bufamt);
+        //applog(LOG_DEBUG, "BE200 getresult %x, return %d, rest %d", out_char, ret, be200->usbdev->bufamt);
 
-    int nonce_test_array[8] = {-3, -2, -1, 0, 2, 3, 4, 5};
-    int i = 0;
+        int nonce_test_array[8] = {-3, -2, -1, 0, 2, 3, 4, 5};
 
-    if (out_char == A_YES) {
+        if (out_char == A_YES) {
 
 
-        // returns midstate[32+4], ntime[4], ndiff[4], exnonc2[4], nonce[4], mj_ID[1], chipID[1]
-        if (be200->usbdev->bufamt == 54) {
-            memcpy(buf, be200->usbdev->buffer, 54);
-            be200->usbdev->bufamt = 0;
-        } else {
-            ret = be200_read(be200, (char *)buf, 54, C_BE200_READ);
+            // returns midstate[32+4], ntime[4], ndiff[4], exnonc2[4], nonce[4], mj_ID[1], chipID[1]
+            if (be200->usbdev->bufamt == 54) {
+                memcpy(buf, be200->usbdev->buffer, 54);
+                be200->usbdev->bufamt = 0;
+            } else {
+                ret = be200_read(be200, (char *)buf, 54, C_BE200_READ);
+            }
+            applog(LOG_DEBUG, "BE200: Get Result data(%u):", (unsigned int)54);
+            hexdump(buf, 54);
+
+            memcpy(&nonce, buf + 48, 4);
+            memcpy(&ntime, buf + 36, 4);
+            nonce = htole32(nonce);
+            ntime = htobe32(ntime);
+
+            applog(LOG_DEBUG, "==== Found! (%08x) (%08x)",
+                   nonce, ntime);
+            hexdump((uint8_t *)be200->works[i] + 128, 96);   //todo, need test
+
+            set_work_ntime(be200->works[i], ntime);
+            test_nonce = nonce + 1;
+            bret = submit_nonce(thr, be200->works[i], test_nonce);
+
+            int test_nonce_count = 0;
+            while (!bret && test_nonce_count < 8) {
+                test_nonce = nonce + nonce_test_array[test_nonce_count];
+                test_nonce_count++;
+                applog(LOG_DEBUG, "BE200 test nonce (%08x) (%08x)",
+                       test_nonce, ntime);
+                bret = submit_nonce(thr, be200->works[i], test_nonce);
+            }
+            if (bret) {
+                hash_count += 0xFFFFFFFF;
+            }
+        } else if (out_char == A_WAL) {
+            applog(LOG_DEBUG, "BE200: chip get ready");
+            info->first = true;
         }
-        applog(LOG_DEBUG, "BE200: Get Result data(%u):", (unsigned int)54);
-        hexdump(buf, 54);
-
-        memcpy(&nonce, buf + 48, 4);
-        memcpy(&ntime, buf + 36, 4);
-        nonce = htole32(nonce);
-        ntime = htobe32(ntime);
-
-        applog(LOG_DEBUG, "==== Found! (%08x) (%08x)",
-               nonce, ntime);
-        hexdump((uint8_t *)be200->works[0] + 128, 96);
-
-        set_work_ntime(be200->works[0], ntime);
-        test_nonce = nonce + 1;
-        bret = submit_nonce(thr, be200->works[0], test_nonce);
-
-        i = 0;
-        while (!bret && i < 8) {
-            test_nonce = nonce + nonce_test_array[i];
-            i++;
-            applog(LOG_DEBUG, "BE200 test nonce (%08x) (%08x)",
-                   test_nonce, ntime);
-            bret = submit_nonce(thr, be200->works[0], test_nonce);
-        }
-        if (!bret) {
-            hash_count = 0;
-        } else {
-            hash_count = 0xFFFFFFFF;
-        }
-    } else if (out_char == A_WAL) {
-        applog(LOG_DEBUG, "BE200: chip get ready");
-        info->first = true;
     }
-
+    
     return hash_count * info->device_diff;
 }
 
