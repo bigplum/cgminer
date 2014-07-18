@@ -257,19 +257,26 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
         quit(1, "Failed to calloc be200_info data");
     info = be200->device_data;
 
-    int idx = 0;
+    int idx = 0, max_test;
+    if (opt_set_be200_max_miner_num > BE200_MAX_MINER_NUM) {
+        max_test = BE200_MAX_MINER_NUM;
+    } else {
+        max_test = opt_set_be200_max_miner_num;
+    }
+    
     for (i = 0; i < BE200_MAX_MINER_NUM; i++) {
         cmd_char = C_ASK + i;
         ret = be200_write(be200, (char *)&cmd_char, 1, C_BE200_INIT);
 
-        applog(LOG_DEBUG, "BE200 init board: %x", cmd_char);
+        applog(LOG_DEBUG, "BE200 init miner: %x", cmd_char);
+        applog(LOG_WARNING, "BE200 test miner id: %x", cmd_char);
 
-        //cgsleep_ms(3000);
+        cgsleep_ms(3000);
         ret = be200_read(be200, (char *)&out_char, 1, C_BE200_READ);
 
-        applog(LOG_DEBUG, "BE200 init board return: %x", out_char);
+        applog(LOG_DEBUG, "BE200 init miner return: %x", out_char);
         if (out_char == A_WAL) {
-            applog(LOG_DEBUG, "BE200 board found %d ......................................", i);
+            applog(LOG_WARNING, "BE200 miner found: %d", i);
             info->miner[idx].id = i;
             idx++;
 
@@ -280,6 +287,10 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
             ret = be200_read(be200, buf, 67, C_BE200_READ);
             applog(LOG_DEBUG, "BE200 send: %x, get %d", cmd_char, ret);
             hexdump((uint8_t *)buf, ret);
+
+            if (idx >= max_test) {
+                break;
+            }
         }
     }
 
