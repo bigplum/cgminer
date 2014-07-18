@@ -450,7 +450,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
     struct be200_task at;
     int ret, i;
     uint8_t cmd_char, out_char;
-    uint8_t buf[128];
+    uint8_t buf[128], chip_id;
     bool bret;
     uint32_t nonce, ntime, test_nonce;
 
@@ -509,11 +509,12 @@ static int64_t be200_scanhash(struct thr_info *thr)
 
             memcpy(&nonce, buf + 48, 4);
             memcpy(&ntime, buf + 36, 4);
+            memcpy(&chip_id, buf + 53, 1);
             nonce = htole32(nonce);
             ntime = htobe32(ntime);
 
-            applog(LOG_DEBUG, "==== Found! (%08x) (%08x)",
-                   nonce, ntime);
+            applog(LOG_DEBUG, "==== Found! (%08x) (%08x) chip %d",
+                   nonce, ntime, chip_id);
             hexdump((uint8_t *)be200->works[i] + 128, 96);   //todo, need test
 
             set_work_ntime(be200->works[i], ntime);
@@ -529,6 +530,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
                 bret = submit_nonce(thr, be200->works[i], test_nonce);
             }
             if (bret) {
+                info->miner[i].asic_hash_done[chip_id] += 0xFFFFFFFF;
                 hash_count += 0xFFFFFFFF;
             }
         } else if (out_char == A_WAL) {
@@ -536,7 +538,17 @@ static int64_t be200_scanhash(struct thr_info *thr)
             info->first = true;
         }
     }
-    
+
+    int j;
+    if (total_secs % 10 < 1) {
+        for (i = 0; i < info->miner_count; i++) {
+            for (j =0; j < BE200_MAX_ASIC_NUM; j++) {
+                applog(LOG_WARNING, "miner %02d, asic %02d, rate %d",
+                    i, j, info->miner[i].asic_hash_done[j] / total_secs * 1000000ull);
+            }
+        }
+    }
+        
     return hash_count * info->device_diff;
 }
 
