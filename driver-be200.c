@@ -482,6 +482,21 @@ static int64_t be200_scanhash(struct thr_info *thr)
         }
     }
 
+    if (info->miner_ready) {
+        info->miner_ready = false;
+        int j;
+        for (j = 0; j < BE200_MAX_MINER_NUM; j++) {
+            if (info->miner_ready_id[j]) {
+                work = get_work(thr, thr->id);
+                if (be200->works[j]) {
+                    //free(be200->works[i]);
+                }
+                be200->works[j] = work;
+                be200_create_task(&at, work);
+                ret = be200_send_task(&at, be200, info, j);
+            }    
+        }
+    }
 
     for (i = 0; i < info->miner_count; i++) {
         cmd_char = C_ASK + info->miner[i].id;  //todo, need test
@@ -494,7 +509,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
 
         //applog(LOG_DEBUG, "BE200 getresult %x, return %d, rest %d", out_char, ret, be200->usbdev->bufamt);
 
-        int nonce_test_array[8] = {-3, -2, -1, 0, 2, 3, 4, 5};
+        int nonce_test_array[8] = {2, 3, 4, 5, -3, -2, -1, 0};
 
         if (out_char == A_YES) {
 
@@ -536,8 +551,9 @@ static int64_t be200_scanhash(struct thr_info *thr)
                 hash_count += 0xFFFFFFFF;
             }
         } else if (out_char == A_WAL) {
-            applog(LOG_DEBUG, "BE200: chip get ready");
-            info->first = true;
+            applog(LOG_DEBUG, "BE200: miner %d:%d get ready", i, info->miner[i].id);
+            info->miner_ready = true;
+            info->miner_ready_id[i] = true;
         }
     }
 /*

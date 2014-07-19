@@ -91,6 +91,8 @@ struct miner_info {
 struct be200_info {
 
     bool first;
+    bool miner_ready;
+    bool miner_ready_id[BE200_MAX_MINER_NUM];
     int device_diff;
 
     int miner_count;
