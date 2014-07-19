@@ -540,11 +540,11 @@ static int64_t be200_scanhash(struct thr_info *thr)
     }
 
     int j;
-    if (total_secs % 10 < 1) {
+    if ((long long)total_secs % 10 < 1) {
         for (i = 0; i < info->miner_count; i++) {
             for (j =0; j < BE200_MAX_ASIC_NUM; j++) {
-                applog(LOG_WARNING, "miner %02d, asic %02d, rate %d",
-                    i, j, info->miner[i].asic_hash_done[j] / total_secs * 1000000ull);
+                applog(LOG_WARNING, "miner %02d asic %02d rate %f sec %f",
+                    i, j, info->miner[i].asic_hash_done[j] / total_secs, total_secs);
             }
         }
     }
