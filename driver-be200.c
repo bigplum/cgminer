@@ -233,7 +233,7 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
     struct be200_info *info;
     struct cgpu_info *be200;
     bool configured;
-    int ret, i;
+    int ret;
     uint8_t cmd_char, out_char;
     char buf[1024];
 
@@ -263,12 +263,13 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
     } else {
         max_test = opt_set_be200_max_miner_num;
     }
-    
+
+    int i;
     for (i = 0; i < BE200_MAX_MINER_NUM; i++) {
         cmd_char = C_ASK + i;
         ret = be200_write(be200, (char *)&cmd_char, 1, C_BE200_INIT);
 
-        applog(LOG_DEBUG, "BE200 init miner: %x", cmd_char);
+        applog(LOG_DEBUG, "BE200 init miner: %x %d", cmd_char, i);
         applog(LOG_WARNING, "BE200 test miner id: %x", cmd_char);
 
         cgsleep_ms(3000);
@@ -276,7 +277,7 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
 
         applog(LOG_DEBUG, "BE200 init miner return: %x", out_char);
         if (out_char == A_WAL) {
-            applog(LOG_WARNING, "BE200 miner found: %d", i);
+            applog(LOG_WARNING, "BE200 miner found: %d:%d", idx, i);
             info->miner[idx].id = i;
             idx++;
 
@@ -349,6 +350,7 @@ static bool be200_prepare(struct thr_info *thr)
     if (!be200->works)
         quit(1, "Failed to calloc be200 works in be200_prepare");
 
+    //memset(&info->miner, 0, sizeof(struct miner_info) * BE200_MAX_MINER_NUM);
     info->thr = thr;
     info->first = true;
 
@@ -369,7 +371,7 @@ static bool be200_prepare(struct thr_info *thr)
 
 
 static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
-                           struct be200_info *info)
+                           struct be200_info *info, int miner_id)
 
 {
     uint8_t buf[BE200_WRITE_SIZE], cmd_char, out_char;
@@ -404,11 +406,11 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
     applog(LOG_DEBUG, "BE200: set diff and freq:");
     hexdump(buf, 3);
 
-    cmd_char = C_JOB + info->miner[0].id;  //todo: send task to multi miner
+    cmd_char = C_JOB + info->miner[miner_id].id;  //todo: send task to multi miner
 
     ret = be200_write(be200, (char *)&cmd_char, 1, ep);
 
-    applog(LOG_DEBUG, "BE200: Sent task cmd: %x", cmd_char);
+    applog(LOG_DEBUG, "BE200: miner %d:%d Sent task cmd: %x", miner_id, info->miner[miner_id].id, cmd_char);
 
 
     be200_data_mode(be200);
@@ -469,7 +471,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
             }
             be200->works[i] = work;
             be200_create_task(&at, work);
-            ret = be200_send_task(&at, be200, info);
+            ret = be200_send_task(&at, be200, info, i);
         }
 
         if (unlikely(be200->usbinfo.nodev)) {
@@ -530,7 +532,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
                 bret = submit_nonce(thr, be200->works[i], test_nonce);
             }
             if (bret) {
-                info->miner[i].asic_hash_done[chip_id] += 0xFFFFFFFF;
+//                info->miner[i].asic_hash_done[chip_id] += 0xFFFFFFFF;
                 hash_count += 0xFFFFFFFF;
             }
         } else if (out_char == A_WAL) {
@@ -538,9 +540,9 @@ static int64_t be200_scanhash(struct thr_info *thr)
             info->first = true;
         }
     }
-
+/*
     int j;
-    if ((long long)total_secs % 10 < 1) {
+    if ((long long)total_secs % 30 < 1) {
         for (i = 0; i < info->miner_count; i++) {
             for (j =0; j < BE200_MAX_ASIC_NUM; j++) {
                 applog(LOG_WARNING, "miner %02d asic %02d rate %f sec %f",
@@ -548,7 +550,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
             }
         }
     }
-        
+        */
     return hash_count * info->device_diff;
 }
 
