@@ -75,3 +75,54 @@ static void hexdump(const uint8_t *p, unsigned int len)
 		hex_print(line);
 	}
 }
+
+
+static void hexdumpW(const uint8_t *p, unsigned int len)
+{
+	unsigned int i, addr;
+	unsigned int wordlen = sizeof(void*);
+	unsigned char v, line[BYTES_PER_LINE * 5];
+
+	for (addr = 0; addr < len; addr += BYTES_PER_LINE) {
+		/* clear line */
+		for (i = 0; i < sizeof(line); i++) {
+			if (i == wordlen * 2 + 52 ||
+			    i == wordlen * 2 + 69) {
+			    	line[i] = '|';
+				continue;
+			}
+
+			if (i == wordlen * 2 + 70) {
+				line[i] = '\0';
+				continue;
+			}
+
+			line[i] = ' ';
+		}
+
+		/* print address */
+		for (i = 0; i < wordlen * 2; i++) {
+			v = addr >> ((wordlen * 2 - i - 1) * 4);
+			line[i] = nibble[v & 0xf];
+		}
+
+		/* dump content */
+		for (i = 0; i < BYTES_PER_LINE; i++) {
+			int pos = (wordlen * 2) + 3 + (i / 8);
+
+			if (addr + i >= len)
+				break;
+
+			v = p[addr + i];
+			line[pos + (i * 3) + 0] = nibble[v >> 4];
+			line[pos + (i * 3) + 1] = nibble[v & 0xf];
+
+			/* character printable? */
+			line[(wordlen * 2) + 53 + i] =
+				(v >= ' ' && v <= '~') ? v : '.';
+		}
+
+            applog(LOG_WARNING, "%s", line);
+	}
+}
+

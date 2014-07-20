@@ -50,6 +50,8 @@ int opt_be200_freq_min = BE200_MIN_FREQUENCY;
 int opt_be200_freq_max = BE200_MAX_FREQUENCY;
 bool opt_be200_auto;
 
+double be200_last_print = 0;
+
 static int option_offset = -1;
 
 void be200_create_task(struct be200_task *at,
@@ -82,13 +84,13 @@ static int be200_write(struct cgpu_info *be200, char *buf, ssize_t len, int ep)
 }
 
 
-static int be200_read_one(struct cgpu_info *be200, char *buf, size_t bufsize, int ep)
+static int be200_read_one(struct cgpu_info *be200, char *buf, size_t readsize, int ep)
 {
-    size_t total = 0, readsize = bufsize;
+    size_t total = 0;
     char readbuf[BE200_READBUF_SIZE];
     int err, amount, ofs = 2, cp;
 
-    err = usb_read_once(be200, readbuf, readsize, &amount, ep);
+    err = usb_read(be200, readbuf, readsize, &amount, ep);
     //applog(LOG_DEBUG, "%s%i: Get be200 read got err %d",
     //       be200->drv->name, be200->device_id, err);
     if (err && err != LIBUSB_ERROR_TIMEOUT)
@@ -99,13 +101,13 @@ static int be200_read_one(struct cgpu_info *be200, char *buf, size_t bufsize, in
     return amount;
 }
 
-static int be200_read(struct cgpu_info *be200, char *buf, size_t bufsize, int ep)
+static int be200_read(struct cgpu_info *be200, char *buf, size_t readsize, int ep)
 {
-    size_t total = 0, readsize = bufsize + 2;
+    size_t total = 0;
     char readbuf[BE200_READBUF_SIZE];
-    int err, amount, ofs = 2, cp;
+    int err, amount;
 
-    err = usb_read_once(be200, readbuf, readsize, &amount, ep);
+    err = usb_read(be200, readbuf, readsize, &amount, ep);
     //applog(LOG_DEBUG, "%s%i: Get be200 read got err %d",
     //       be200->drv->name, be200->device_id, err);
     if (err && err != LIBUSB_ERROR_TIMEOUT)
@@ -334,7 +336,16 @@ static void be200_detect(bool __maybe_unused hotplug)
 
 static void be200_init(struct cgpu_info *be200)
 {
+    uint8_t buf[16];
+    int ret;
+
     applog(LOG_INFO, "BE200: Opened on %s", be200->device_path);
+
+    
+    buf[0] = C_LPO + 0x1f;   //time rolling  InFuture = 10+ch*10
+    buf[1] = C_GCK + opt_set_be200_freq/10 -1;    //freq
+    ret = be200_write(be200, (char *)buf, 2, C_BE200_INIT);
+    applog(LOG_WARNING, "BE200: set ntimeroll %x and freq %x", buf[0], buf[1]);
 }
 
 static bool be200_prepare(struct thr_info *thr)
@@ -384,7 +395,7 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
     struct pool *pool = current_pool();
     int idiff = pool->sdiff;
     applog(LOG_DEBUG, "BE200: pool diff: %d", idiff);
-
+/*
     if (idiff >= 256*1024) {
         idiff = 3;
         info->device_diff = 256*1024;
@@ -400,17 +411,14 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
     }
 
     buf[0] = 0x60 + idiff;   //diff
-    buf[1] = 0x2b;   //time rolling
-    buf[2] = 0x40 + opt_set_be200_freq/10 -1;    //freq
-    ret = be200_write(be200, (char *)buf, 3, ep);
-    applog(LOG_DEBUG, "BE200: set diff and freq:");
-    hexdump(buf, 3);
-
+    ret = be200_write(be200, (char *)buf, 1, ep);
+    applog(LOG_DEBUG, "BE200: set diff %x", buf[0]);
+*/
     cmd_char = C_JOB + info->miner[miner_id].id;  //todo: send task to multi miner
 
     ret = be200_write(be200, (char *)&cmd_char, 1, ep);
 
-    applog(LOG_DEBUG, "BE200: miner %d:%d Sent task cmd: %x", miner_id, info->miner[miner_id].id, cmd_char);
+    applog(LOG_WARNING, "BE200: miner %d:%d Sent task cmd: %x", miner_id, info->miner[miner_id].id, cmd_char);
 
 
     be200_data_mode(be200);
@@ -433,7 +441,7 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
     //cgsleep_ms(500);
     ret = be200_read_one(be200, (char *)&out_char, 1, ep);
 
-    applog(LOG_DEBUG, "====BE200 send task return: %x", out_char);
+    applog(LOG_DEBUG, "BE200 send task return: %x", out_char);
 
     be200_cmd_mode(be200);
 
@@ -455,10 +463,15 @@ static int64_t be200_scanhash(struct thr_info *thr)
     uint8_t buf[128], chip_id;
     bool bret;
     uint32_t nonce, ntime, test_nonce;
+    time_t recv_time, last_recv_time;
 
-    if (thr->work_restart || thr->work_update || info->first) {
-        applog(LOG_DEBUG, "BE200: New stratum: restart: %d, update: %d, first: %d",
-               thr->work_restart, thr->work_update, info->first);
+    
+    recv_time = time(NULL);
+
+    if (thr->work_restart || thr->work_update || info->first || recv_time - last_recv_time > 2) {
+        applog(LOG_WARNING, "BE200: New stratum: restart: %d, update: %d, first: %d, delt: %ld",
+               thr->work_restart, thr->work_update, info->first, recv_time - last_recv_time);
+        last_recv_time = recv_time;
         thr->work_update = false;
         thr->work_restart = false;
         if (unlikely(info->first))
@@ -494,6 +507,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
                 be200->works[j] = work;
                 be200_create_task(&at, work);
                 ret = be200_send_task(&at, be200, info, j);
+                info->miner_ready_id[j] = false;
             }    
         }
     }
@@ -530,44 +544,66 @@ static int64_t be200_scanhash(struct thr_info *thr)
             nonce = htole32(nonce);
             ntime = htobe32(ntime);
 
-            applog(LOG_DEBUG, "==== Found! (%08x) (%08x) chip %d",
-                   nonce, ntime, chip_id);
             hexdump((uint8_t *)be200->works[i] + 128, 96);   //todo, need test
 
             set_work_ntime(be200->works[i], ntime);
             test_nonce = nonce + 1;
             bret = submit_nonce(thr, be200->works[i], test_nonce);
+            applog(LOG_DEBUG, "==== Found nonce! (%08x) (%08x) chip %d  %d",
+                   nonce, ntime, chip_id, bret);
 
             int test_nonce_count = 0;
             while (!bret && test_nonce_count < 8) {
                 test_nonce = nonce + nonce_test_array[test_nonce_count];
                 test_nonce_count++;
-                applog(LOG_DEBUG, "BE200 test nonce (%08x) (%08x)",
-                       test_nonce, ntime);
                 bret = submit_nonce(thr, be200->works[i], test_nonce);
+                applog(LOG_DEBUG, "====BE200 test nonce (%08x) (%08x)  %d",
+                       test_nonce, ntime, bret);
             }
             if (bret) {
-//                info->miner[i].asic_hash_done[chip_id] += 0xFFFFFFFF;
+                info->miner[i].asic_hash_done[chip_id]++;
                 hash_count += 0xFFFFFFFF;
+                applog(LOG_DEBUG, "====: %" PRIu64 ", %d", hash_count, info->device_diff);
             }
         } else if (out_char == A_WAL) {
-            applog(LOG_DEBUG, "BE200: miner %d:%d get ready", i, info->miner[i].id);
+            applog(LOG_WARNING, "BE200: miner %d:%d get ready", i, info->miner[i].id);
             info->miner_ready = true;
             info->miner_ready_id[i] = true;
+        } else if (out_char == A_NO) {
+        } else {
+            applog(LOG_WARNING,"BE200: return %x", out_char);
         }
     }
-/*
+
     int j;
-    if ((long long)total_secs % 30 < 1) {
+    if (total_secs - be200_last_print > 60) {
+        be200_last_print = total_secs;
         for (i = 0; i < info->miner_count; i++) {
-            for (j =0; j < BE200_MAX_ASIC_NUM; j++) {
-                applog(LOG_WARNING, "miner %02d asic %02d rate %f sec %f",
-                    i, j, info->miner[i].asic_hash_done[j] / total_secs, total_secs);
+            for (j =0; j < BE200_MAX_ASIC_NUM; j+=8) {
+                applog(LOG_WARNING, "====miner %02d s: %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" "
+                                                    "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" ",
+                    i, info->miner[i].asic_hash_done[j],
+                    info->miner[i].asic_hash_done[j+1],
+                    info->miner[i].asic_hash_done[j+2],
+                    info->miner[i].asic_hash_done[j+3],
+                    info->miner[i].asic_hash_done[j+4],
+                    info->miner[i].asic_hash_done[j+5],
+                    info->miner[i].asic_hash_done[j+6],
+                    info->miner[i].asic_hash_done[j+7]
+                    );
             }
+            
+            //self test
+            cmd_char = C_TRS + info->miner[i].id;
+            ret = be200_write(be200, (char *)&cmd_char, 1, C_BE200_INIT);
+            //cgsleep_ms(1000);
+            ret = be200_read(be200, (char *)buf, 67, C_BE200_READ);
+            hexdumpW((uint8_t *)buf, ret);
+            
         }
     }
-        */
-    return hash_count * info->device_diff;
+
+    return hash_count;// * info->device_diff;
 }
 
 

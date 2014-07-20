@@ -42,10 +42,10 @@
 #define M_LRST	(2 << 5)	// reset only the selectd by C_CLK chip
 
 // commands global for all boards
-#define C_RES	(0 << 5)	// resets all the mega88s on all boards, returns silence
-#define C_LPO	(1 << 5)	// LongPoll - stop the jobs, clear the FIFO pojnters, returns silence, the BoardID contains future/10 - 1 value, eg v=2 -> fu=10*(2+1) = 30 seconds
-#define C_GCK	(2 << 5)	// global clock for all boards, on the BoardID place & 0x0f
-#define C_DIF	(3 << 5)	// the BoardID replacedby last LSB 2 bits the difficulty
+#define C_RES	(0 << 5)	//00  resets all the mega88s on all boards, returns silence
+#define C_LPO	(1 << 5)	//20 LongPoll - stop the jobs, clear the FIFO pojnters, returns silence, the BoardID contains future/10 - 1 value, eg v=2 -> fu=10*(2+1) = 30 seconds
+#define C_GCK	(2 << 5)	//40  global clock for all boards, on the BoardID place & 0x0f
+#define C_DIF	(3 << 5)	//60 the BoardID replacedby last LSB 2 bits the difficulty
 
 // commands board specified ones
 

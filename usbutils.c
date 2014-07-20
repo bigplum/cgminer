@@ -80,7 +80,7 @@ static cgtimer_t usb11_cgt;
 #define WIN_CALLBACK_EXTRA 40
 #define WIN_WRITE_CBEXTRA 5000
 #else
-#define BE200_TIMEOUT_MS 999
+#define BE200_TIMEOUT_MS 100
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
@@ -704,7 +704,7 @@ static struct usb_find_devices find_dev[] = {
             .idProduct = 0xea60,
             .config = 1,
             .timeout = BE200_TIMEOUT_MS,
-            .latency = LATENCY_STD,
+            .latency = LATENCY_UNUSED,
             INTINFO(be200_ints) },
 #endif
 	{ DRIVER_MAX, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
