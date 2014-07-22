@@ -418,7 +418,7 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
 
     ret = be200_write(be200, (char *)&cmd_char, 1, ep);
 
-    applog(LOG_WARNING, "BE200: miner %d:%d Sent task cmd: %x", miner_id, info->miner[miner_id].id, cmd_char);
+    applog(LOG_DEBUG, "BE200: miner %d:%d Sent task cmd: %x", miner_id, info->miner[miner_id].id, cmd_char);
 
 
     be200_data_mode(be200);
@@ -468,7 +468,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
     
     recv_time = time(NULL);
 
-    if (thr->work_restart || thr->work_update || info->first || recv_time - last_recv_time > 2) {
+    if (thr->work_restart || thr->work_update || info->first) { // || recv_time - last_recv_time > 2) {
         applog(LOG_WARNING, "BE200: New stratum: restart: %d, update: %d, first: %d, delt: %ld",
                thr->work_restart, thr->work_update, info->first, recv_time - last_recv_time);
         last_recv_time = recv_time;
