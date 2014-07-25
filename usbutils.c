@@ -80,7 +80,7 @@ static cgtimer_t usb11_cgt;
 #define WIN_CALLBACK_EXTRA 40
 #define WIN_WRITE_CBEXTRA 5000
 #else
-#define BE200_TIMEOUT_MS 100
+#define BE200_TIMEOUT_MS 200
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100

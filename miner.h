@@ -998,7 +998,7 @@ extern float opt_rock_freq;
 #ifdef USE_BE200
 extern float opt_set_be200_freq;
 extern int opt_set_be200_max_miner_num;
-
+extern int opt_set_be200_baud;
 #endif
 extern bool opt_worktime;
 #ifdef USE_AVALON

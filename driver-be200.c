@@ -42,6 +42,7 @@
 #include "hexdump.c"
 #include "util.h"
 
+int opt_be200_baud = BE200_CP210X_DATA_BAUD;
 int opt_be200_temp = BE200_TEMP_TARGET;
 int opt_be200_overheat = BE200_TEMP_OVERHEAT;
 int opt_be200_fan_min = BE200_DEFAULT_FAN_MIN_PWM;
@@ -76,7 +77,7 @@ static int be200_write(struct cgpu_info *be200, char *buf, ssize_t len, int ep)
         return BE200_SEND_ERROR;
     }
     if (amount != len) {
-        applog(LOG_WARNING, "usb_write length mismatch on be200_write");
+        applog(LOG_WARNING, "usb_write length mismatch on be200_write %d:%d", amount, len);
         return BE200_SEND_ERROR;
     }
 
@@ -176,7 +177,7 @@ static void be200_data_mode(struct cgpu_info *be200)
 
     // Set line control
     transfer(be200, CP210X_TYPE_OUT, BE200_CP210X_SET_LINE_CTL, BE200_CP210X_DATA_LINE_CTL_VALUE,
-             interface, C_SETFLOW);
+             interface, C_SETLINE);
 
     if (be200->usbinfo.nodev)
         return;
@@ -189,7 +190,7 @@ static void be200_data_mode(struct cgpu_info *be200)
         return;
 
     // Set the baud
-    uint32_t data = BE200_CP210X_DATA_BAUD;
+    uint32_t data = opt_be200_baud;
     _transfer(be200, CP210X_TYPE_OUT, CP210X_REQUEST_BAUD, 0,
               interface, &data, sizeof(data), C_SETBAUD);
 
@@ -205,24 +206,40 @@ static void be200_cmd_mode(struct cgpu_info *be200)
 
     interface = usb_interface(be200);
 
-    // Set line control
-    transfer(be200, CP210X_TYPE_OUT, BE200_CP210X_SET_LINE_CTL, BE200_CP210X_CMD_LINE_CTL_VALUE,
-             interface, C_SETFLOW);
+    // Set the baud
+    uint32_t data = opt_be200_baud;
+    _transfer(be200, CP210X_TYPE_OUT, CP210X_REQUEST_BAUD, 0,
+              interface, &data, sizeof(data), C_SETBAUD);
 
     if (be200->usbinfo.nodev)
         return;
+
+    // Set line control
+    transfer(be200, CP210X_TYPE_OUT, BE200_CP210X_SET_LINE_CTL, BE200_CP210X_CMD_LINE_CTL_VALUE,
+             interface, C_SETLINE);
+
+    if (be200->usbinfo.nodev)
+        return;
+
+#if 0
+    // Set xon
+    transfer(be200, CP210X_TYPE_OUT, 0x09, 0x17,
+             interface, C_SETLINE);
+
+    if (be200->usbinfo.nodev)
+        return;
+
+    // Set xoff
+    transfer(be200, CP210X_TYPE_OUT, 0x0A, 0x19,
+             interface, C_SETLINE);
+
+    if (be200->usbinfo.nodev)
+        return;
+#endif
 
     // Set data control
     transfer(be200, CP210X_TYPE_OUT, CP210X_REQUEST_DATA, BE200_CP210X_VALUE_DATA,
              interface, C_SETDATA);
-
-    if (be200->usbinfo.nodev)
-        return;
-
-    // Set the baud
-    uint32_t data = BE200_CP210X_DATA_BAUD;
-    _transfer(be200, CP210X_TYPE_OUT, CP210X_REQUEST_BAUD, 0,
-              interface, &data, sizeof(data), C_SETBAUD);
 
 
 }
@@ -244,6 +261,10 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
     if (!usb_init(be200, dev, found))
         goto shin;
 
+    if (opt_set_be200_baud == 2) {
+        opt_be200_baud = BE200_CP210X_DATA_BAUD_2;
+    }
+    applog(LOG_WARNING, "BE200 baud: %d, %d", opt_set_be200_baud, opt_be200_baud);
 
     /* Even though this is an FTDI type chip, we want to do the parsing
      * all ourselves so set it to std usb type */
@@ -265,7 +286,7 @@ static struct cgpu_info *be200_detect_one(libusb_device *dev, struct usb_find_de
     } else {
         max_test = opt_set_be200_max_miner_num;
     }
-
+    
     int i;
     for (i = 0; i < BE200_MAX_MINER_NUM; i++) {
         cmd_char = C_ASK + i;
@@ -336,6 +357,7 @@ static void be200_detect(bool __maybe_unused hotplug)
 
 static void be200_init(struct cgpu_info *be200)
 {
+    struct be200_info *info = be200->device_data;
     uint8_t buf[16];
     int ret;
 
@@ -345,6 +367,8 @@ static void be200_init(struct cgpu_info *be200)
     buf[0] = C_LPO + 0x1f;   //time rolling  InFuture = 10+ch*10
     buf[1] = C_GCK + opt_set_be200_freq/10 -1;    //freq
     ret = be200_write(be200, (char *)buf, 2, C_BE200_INIT);
+    info->device_diff = 0;
+    
     applog(LOG_WARNING, "BE200: set ntimeroll %x and freq %x", buf[0], buf[1]);
 }
 
@@ -391,11 +415,11 @@ static int be200_send_task(const struct be200_task *at, struct cgpu_info *be200,
     size_t nr_len;
 
 
+    /*
     unsigned char target[32];
     struct pool *pool = current_pool();
     int idiff = pool->sdiff;
     applog(LOG_DEBUG, "BE200: pool diff: %d", idiff);
-/*
     if (idiff >= 256*1024) {
         idiff = 3;
         info->device_diff = 256*1024;
@@ -544,7 +568,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
             nonce = htole32(nonce);
             ntime = htobe32(ntime);
 
-            hexdump((uint8_t *)be200->works[i] + 128, 96);   //todo, need test
+            //hexdump((uint8_t *)be200->works[i] + 128, 96);   //todo, need test
 
             set_work_ntime(be200->works[i], ntime);
             test_nonce = nonce + 1;
@@ -566,7 +590,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
                 applog(LOG_DEBUG, "====: %" PRIu64 ", %d", hash_count, info->device_diff);
             }
         } else if (out_char == A_WAL) {
-            applog(LOG_WARNING, "BE200: miner %d:%d get ready", i, info->miner[i].id);
+            applog(LOG_DEBUG, "BE200: miner %d:%d get ready", i, info->miner[i].id);
             info->miner_ready = true;
             info->miner_ready_id[i] = true;
         } else if (out_char == A_NO) {

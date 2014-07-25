@@ -217,6 +217,7 @@ float opt_rock_freq = 270;
 #ifdef USE_BE200
 float opt_set_be200_freq = 270;
 int opt_set_be200_max_miner_num = 32;
+int opt_set_be200_baud = 1;
 #endif
 bool opt_worktime;
 #ifdef USE_AVALON
@@ -1148,7 +1149,10 @@ static struct opt_table opt_config_table[] = {
 		     "Set be200 frequency in MHz, range 125-500"),
 	OPT_WITH_ARG("--be200-miner",
 		     set_int_1_to_65535, &opt_show_intval, &opt_set_be200_max_miner_num,
-		     "Set be200 frequency in MHz, range 125-500"),
+		     "Set be200 miner num, range 1-32"),
+	OPT_WITH_ARG("--be200-baud",
+		     set_int_1_to_10, &opt_show_intval, &opt_set_be200_baud,
+		     "Set be200 miner baud rate, range 1-2"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
