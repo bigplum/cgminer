@@ -670,6 +670,12 @@ static int64_t be200_scanhash(struct thr_info *thr)
     return hash_count;// * info->device_diff;
 }
 
+static void be200_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
+{
+    struct be200_info *info = (struct be200_info *)(cgpu->device_data);
+    tailsprintf(buf, bufsiz, "%5.1fMhz : %d", opt_set_be200_freq, opt_be200_baud);
+}
+
 
 static void be200_shutdown(struct thr_info *thr)
 {
@@ -688,6 +694,7 @@ struct device_drv be200_drv = {
     .name = "BE200",
     .drv_detect = be200_detect,
     .thread_prepare = be200_prepare,
+    .get_statline_before = be200_statline_before,
     .hash_work = hash_driver_work,
     .scanwork = be200_scanhash,
     .reinit_device = be200_init,
