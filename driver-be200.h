@@ -86,6 +86,7 @@ struct miner_info {
     int freq;
     int asic_count;
     uint64_t asic_hash_done[BE200_MAX_ASIC_NUM];
+    uint64_t asic_hw[BE200_MAX_ASIC_NUM];
 };
 
 struct be200_info {

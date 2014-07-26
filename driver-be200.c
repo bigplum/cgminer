@@ -584,10 +584,13 @@ static int64_t be200_scanhash(struct thr_info *thr)
                 applog(LOG_DEBUG, "====BE200 test nonce (%08x) (%08x)  %d",
                        test_nonce, ntime, bret);
             }
+            
             if (bret) {
                 info->miner[i].asic_hash_done[chip_id]++;
                 hash_count += 0xFFFFFFFF;
                 applog(LOG_DEBUG, "====: %" PRIu64 ", %d", hash_count, info->device_diff);
+            } else {
+                info->miner[i].asic_hw[chip_id]++;
             }
         } else if (out_char == A_WAL) {
             applog(LOG_DEBUG, "BE200: miner %d:%d get ready", i, info->miner[i].id);
@@ -600,11 +603,12 @@ static int64_t be200_scanhash(struct thr_info *thr)
     }
 
     int j;
+    int64_t hash_total = 0, hw_total = 0;
     if (total_secs - be200_last_print > 60) {
         be200_last_print = total_secs;
         for (i = 0; i < info->miner_count; i++) {
             for (j =0; j < BE200_MAX_ASIC_NUM; j+=8) {
-                applog(LOG_WARNING, "====miner %02d s: %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" "
+                applog(LOG_WARNING, "miner %02d hash done: %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" "
                                                     "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" ",
                     i, info->miner[i].asic_hash_done[j],
                     info->miner[i].asic_hash_done[j+1],
@@ -615,14 +619,50 @@ static int64_t be200_scanhash(struct thr_info *thr)
                     info->miner[i].asic_hash_done[j+6],
                     info->miner[i].asic_hash_done[j+7]
                     );
+                hash_total += info->miner[i].asic_hash_done[j] +
+                    info->miner[i].asic_hash_done[j+1] +
+                    info->miner[i].asic_hash_done[j+2] +
+                    info->miner[i].asic_hash_done[j+3] +
+                    info->miner[i].asic_hash_done[j+4] +
+                    info->miner[i].asic_hash_done[j+5] +
+                    info->miner[i].asic_hash_done[j+6] +
+                    info->miner[i].asic_hash_done[j+7];
             }
-            
+            applog(LOG_WARNING, "miner %02d hash done total: %"PRIu64" rate: %fGh/s", i, 
+                hash_total, (float)(hash_total*4/total_secs));
+                
+            for (j =0; j < BE200_MAX_ASIC_NUM; j+=8) {
+                applog(LOG_WARNING, "miner %02d HW: %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" "
+                                                    "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" ",
+                    i, info->miner[i].asic_hw[j],
+                    info->miner[i].asic_hw[j+1],
+                    info->miner[i].asic_hw[j+2],
+                    info->miner[i].asic_hw[j+3],
+                    info->miner[i].asic_hw[j+4],
+                    info->miner[i].asic_hw[j+5],
+                    info->miner[i].asic_hw[j+6],
+                    info->miner[i].asic_hw[j+7]
+                    );
+                hw_total += info->miner[i].asic_hw[j] +
+                    info->miner[i].asic_hw[j+1] +
+                    info->miner[i].asic_hw[j+2] +
+                    info->miner[i].asic_hw[j+3] +
+                    info->miner[i].asic_hw[j+4] +
+                    info->miner[i].asic_hw[j+5] +
+                    info->miner[i].asic_hw[j+6] +
+                    info->miner[i].asic_hw[j+7];
+            }
+            applog(LOG_WARNING, "miner %02d HW total: %"PRIu64" per: %f", i, 
+                hw_total, (float)hw_total/(hw_total+hash_total));
+
+            /*
             //self test
             cmd_char = C_TRS + info->miner[i].id;
             ret = be200_write(be200, (char *)&cmd_char, 1, C_BE200_INIT);
             //cgsleep_ms(1000);
             ret = be200_read(be200, (char *)buf, 67, C_BE200_READ);
             hexdumpW((uint8_t *)buf, ret);
+            */
             
         }
     }
