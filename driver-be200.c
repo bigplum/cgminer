@@ -623,11 +623,11 @@ static int64_t be200_scanhash(struct thr_info *thr)
                     info->miner[i].asic_hash_done[j+6] +
                     info->miner[i].asic_hash_done[j+7];
             }
-            applog(LOG_WARNING, "miner %02d hash done total: %"PRIu64" rate: %fGh/s", i, 
+            applog(LOG_DEBUG, "miner %02d hash done total: %"PRIu64" rate: %fGh/s", i, 
                 hash_total, (float)(hash_total*4/total_secs));
                 
             for (j =0; j < BE200_MAX_ASIC_NUM; j+=8) {
-                applog(LOG_WARNING, "miner %02d HW: %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" "
+                applog(LOG_DEBUG, "miner %02d HW: %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" "
                                                     "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" ",
                     i, info->miner[i].asic_hw[j],
                     info->miner[i].asic_hw[j+1],
@@ -647,7 +647,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
                     info->miner[i].asic_hw[j+6] +
                     info->miner[i].asic_hw[j+7];
             }
-            applog(LOG_WARNING, "miner %02d HW total: %"PRIu64" per: %f", i, 
+            applog(LOG_DEBUG, "miner %02d HW total: %"PRIu64" per: %f", i, 
                 hw_total, (float)hw_total/(hw_total+hash_total));
 
             /*
