@@ -43,13 +43,6 @@
 #include "util.h"
 
 int opt_be200_baud = BE200_CP210X_DATA_BAUD;
-int opt_be200_temp = BE200_TEMP_TARGET;
-int opt_be200_overheat = BE200_TEMP_OVERHEAT;
-int opt_be200_fan_min = BE200_DEFAULT_FAN_MIN_PWM;
-int opt_be200_fan_max = BE200_DEFAULT_FAN_MAX_PWM;
-int opt_be200_freq_min = BE200_MIN_FREQUENCY;
-int opt_be200_freq_max = BE200_MAX_FREQUENCY;
-bool opt_be200_auto;
 
 double be200_last_print = 0;
 
@@ -362,7 +355,9 @@ static void be200_init(struct cgpu_info *be200)
     int ret;
 
     applog(LOG_INFO, "BE200: Opened on %s", be200->device_path);
-
+    if (opt_set_be200_freq > 290) {
+        opt_set_be200_freq = 290;
+    }
     
     buf[0] = C_LPO + 0x1f;   //time rolling  InFuture = 10+ch*10
     buf[1] = C_GCK + opt_set_be200_freq/10 -1;    //freq
@@ -608,7 +603,7 @@ static int64_t be200_scanhash(struct thr_info *thr)
         be200_last_print = total_secs;
         for (i = 0; i < info->miner_count; i++) {
             for (j =0; j < BE200_MAX_ASIC_NUM; j+=8) {
-                applog(LOG_WARNING, "miner %02d hash done: %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" "
+                applog(LOG_DEBUG, "miner %02d hash done: %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" "
                                                     "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" ",
                     i, info->miner[i].asic_hash_done[j],
                     info->miner[i].asic_hash_done[j+1],

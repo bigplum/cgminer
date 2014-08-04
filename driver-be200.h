@@ -31,8 +31,7 @@
 #define BE200_DEFAULT_TIMEOUT 0x2D
 #define BE200_MIN_FREQUENCY 160
 #define BE200_MAX_FREQUENCY 360
-#define BE200_DEFAULT_FREQUENCY 320
-#define BE200_MAX_MINER_NUM 32
+#define BE200_MAX_MINER_NUM 2
 #define BE200_MAX_ASIC_NUM 24
 
 // modes of C_CLK
@@ -122,15 +121,7 @@ struct be200_info {
 #define BE200_SEND_OK 0
 
 extern struct be200_info **be200_info;
-extern int opt_be200_temp;
-extern int opt_be200_overheat;
-extern int opt_be200_fan_min;
-extern int opt_be200_fan_max;
-extern int opt_be200_freq_min;
-extern int opt_be200_freq_max;
-extern bool opt_be200_auto;
-extern int opt_bitburner_core_voltage;
-extern int opt_bitburner_fury_core_voltage;
+
 
 #endif /* USE_BE200 */
 #endif	/* BE200_H */
